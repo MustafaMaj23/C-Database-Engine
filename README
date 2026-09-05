@@ -1,15 +1,71 @@
-# Database Engine in C
+# C Database Engine
 
-A lightweight relational database engine built from scratch in C, incorporating B-Tree indexing, a file-backed page storage layer, a buffer pool manager, and an interactive query parser.
+A relational database engine built from scratch in C for Linux[cite: 1]. It features a file-backed page storage layer and an in-memory buffer pool manager that writes and persists fixed 4096-byte blocks directly to disk[cite: 1]. The engine incorporates B-tree indexing for logarithmic primary key lookups, directly mapping keys to physical page and offset coordinates[cite: 1]. It also includes a custom SQL execution engine and parser supporting core query operations like `INSERT`, full-scan `SELECT`, and index-filtered `WHERE` queries[cite: 1].
 
-## System Architecture
-- **Disk-Backed Pager**: Allocates and persists fixed 4096-byte blocks (`Page`) directly to disk via raw POSIX file descriptors.
-- **Buffer Pool Manager**: Caches pages in memory to minimize expensive disk I/O operations and flushes modified blocks on shutdown.
-- **B-Tree Indexing**: Provides logarithmic $O(\log n)$ primary key search operations mapped to physical `(page_index, row_offset)` locations.
-- **SQL Execution Engine**: Parses and executes basic SQL statements (`INSERT`, `SELECT`, and equality filter `SELECT WHERE id = <key>`).
+## Architectural Overview
 
-## Compilation & Usage
+The engine separates concerns into three distinct layers: storage, indexing, and query execution.
 
-### Build
-```bash
-make
+*   **Disk-Backed Pager (`pager.c`)**: Manages persistent file storage using fixed 4096-byte pages via raw POSIX file descriptors, allocating new pages dynamically as record capacity expands.
+*   **Buffer Pool Manager (`pager.c`)**: Caches active page pointers in memory for sub-microsecond latency and intercepts shutdown signals to flush all dirty pages safely to disk.
+*   **B-Tree Index (`btree.c`)**: Implements a balanced multi-way search tree to eliminate sequential scanning for targeted lookups (O(log n) complexity), mapping internal keys directly to physical `(page_index, row_offset)` coordinates.
+*   **SQL Execution Engine (`main.c`)**: A continuous Read-Eval-Print Loop (REPL) that parses commands, validates schema bounds, and routes queries to either the sequential scanner or the B-tree index.
+
+## On-Disk Storage Layout
+
+Data files (`database.db`) are laid out as contiguous 4096-byte binary chunks:
+
+    +-------------------------------------------------------------+
+    |                          Page 0                             |
+    |  [num_rows: uint32]  [Row 0]  [Row 1]  [Row 2] ... [Row 31] |
+    +-------------------------------------------------------------+
+    |                          Page 1                             |
+    |  [num_rows: uint32]  [Row 0]  [Row 1]  [Row 2] ... [Row 31] |
+    +-------------------------------------------------------------+
+
+Each record is packed into a fixed-width 68-byte binary layout:
+*   `id` (uint32_t): 4 bytes
+*   `username` (char[32]): 32 bytes
+*   `email` (char[32]): 32 bytes
+
+## Getting Started
+
+### Prerequisites
+*   GCC or Clang compiler
+*   GNU Make
+*   POSIX-compliant operating system (Linux, macOS)
+
+### Build and Run
+Clone the repository and compile using the provided Makefile:
+
+    git clone https://github.com/MustafaMaj23/c-db-engine.git
+    cd c-db-engine
+    make
+    ./db_engine
+
+## Supported Commands
+
+| Command | Syntax | Description |
+| :--- | :--- | :--- |
+| **Insert** | `INSERT <id> <username> <email>` | Writes to the lowest available disk page slot and pushes the new key to the B-Tree. |
+| **Scan** | `SELECT` | Performs a sequential physical scan across every allocated disk page and active row offset. |
+| **Lookup** | `SELECT WHERE id = <id>` | Bypasses sequential scanning by querying the B-tree for the exact coordinate. |
+| **Quit** | `EXIT` | Flushes all in-memory buffers to disk and exits cleanly. |
+
+## Example Session
+
+    Custom C Database Engine Initialized. Type 'EXIT' to quit.
+    db > INSERT 1 alice alice@domain.com
+    Inserted row (id: 1) at page 0, offset 0.
+    db > INSERT 2 bob bob@domain.com
+    Inserted row (id: 2) at page 0, offset 1.
+    db > SELECT
+    (1, alice, alice@domain.com)
+    (2, bob, bob@domain.com)
+    db > SELECT WHERE id = 1
+    Found: ID=1, Username=alice, Email=alice@domain.com
+    db > EXIT
+
+## License
+
+Distributed under the MIT License.
