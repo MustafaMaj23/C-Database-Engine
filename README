@@ -1,0 +1,15 @@
+# Database Engine in C
+
+A lightweight relational database engine built from scratch in C, incorporating B-Tree indexing, a file-backed page storage layer, a buffer pool manager, and an interactive query parser.
+
+## System Architecture
+- **Disk-Backed Pager**: Allocates and persists fixed 4096-byte blocks (`Page`) directly to disk via raw POSIX file descriptors.
+- **Buffer Pool Manager**: Caches pages in memory to minimize expensive disk I/O operations and flushes modified blocks on shutdown.
+- **B-Tree Indexing**: Provides logarithmic $O(\log n)$ primary key search operations mapped to physical `(page_index, row_offset)` locations.
+- **SQL Execution Engine**: Parses and executes basic SQL statements (`INSERT`, `SELECT`, and equality filter `SELECT WHERE id = <key>`).
+
+## Compilation & Usage
+
+### Build
+```bash
+make
